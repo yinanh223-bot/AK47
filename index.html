@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極速打靶挑戰 - 去背圖更新版</title>
+    <title>極速打靶挑戰 - 音樂加入版</title>
     <style>
         :root {
             --primary-color: #ff4757;
@@ -98,7 +98,7 @@
             max-width: 1000px;
             height: 70%;
             pointer-events: none;
-            z-index: 500; /* 位於靶子之上，UI之下 */
+            z-index: 500;
             display: flex;
             justify-content: flex-end;
             align-items: flex-end;
@@ -114,7 +114,6 @@
             filter: drop-shadow(-20px 0 20px rgba(0,0,0,0.6));
         }
 
-        /* 槍口火光 */
         .muzzle-flash {
             position: absolute;
             top: 25%; 
@@ -128,7 +127,6 @@
             mix-blend-mode: screen;
         }
 
-        /* 後座力動畫 */
         @keyframes recoil-shot {
             0% { transform: translate(0, 0) rotate(0deg) scale(1); }
             20% { transform: translate(40px, 60px) rotate(3deg) scale(1.05); }
@@ -160,6 +158,12 @@
 <body>
 
     <div id="game-container">
+        <!-- 背景音樂元素 -->
+        <audio id="bg-music" loop>
+            <source src="電子霓虹.mp3" type="audio/mpeg">
+            您的瀏覽器不支援音樂播放。
+        </audio>
+
         <div id="crosshair"></div>
         <div id="ui-layer">
             <div class="stat-box">分數: <span id="score">0</span></div>
@@ -167,10 +171,8 @@
         </div>
         <div id="reload-prompt">彈匣已空！按 [R] 鍵</div>
 
-        <!-- 槍枝容器 -->
         <div id="weapon-wrapper">
             <div class="muzzle-flash" id="flash"></div>
-            <!-- 使用指定的 去背.png -->
             <img src="去背.png" id="ak-sprite" alt="AK-47 模型載入中..." 
                  onerror="this.style.border='2px solid red'; console.error('無法讀取 去背.png');">
         </div>
@@ -193,11 +195,10 @@
         let isMouseDown = false, lastShootTime = 0, targets = [];
         
         const weaponWrapper = document.getElementById('weapon-wrapper');
-        const akSprite = document.getElementById('ak-sprite');
         const flash = document.getElementById('flash');
         const crosshair = document.getElementById('crosshair');
+        const bgMusic = document.getElementById('bg-music');
 
-        // 滑鼠移動時的槍枝慣性
         document.addEventListener('mousemove', (e) => {
             crosshair.style.left = e.clientX + 'px';
             crosshair.style.top = e.clientY + 'px';
@@ -224,16 +225,13 @@
             ammo--;
             document.getElementById('ammo').innerText = ammo;
 
-            // 後座力特效 (作用於整個容器)
             weaponWrapper.style.animation = 'none';
             void weaponWrapper.offsetWidth;
             weaponWrapper.style.animation = 'recoil-shot 0.1s ease-out';
             
-            // 槍口火光
             flash.style.display = 'block';
             setTimeout(() => flash.style.display = 'none', 50);
 
-            // 擊中判定
             const hitEl = document.elementFromPoint(
                 parseInt(crosshair.style.left), 
                 parseInt(crosshair.style.top)
@@ -258,7 +256,6 @@
             document.getElementById('reload-prompt').innerText = "換彈中...";
             document.getElementById('reload-prompt').style.display = 'block';
             
-            // 換彈動畫：槍枝下沉
             weaponWrapper.style.transition = "transform 0.6s cubic-bezier(0.5, 0, 0.5, 1)";
             weaponWrapper.style.transform = `translateY(120%) rotate(15deg)`; 
             
@@ -286,6 +283,12 @@
         }
 
         function startGame() {
+            // 播放背景音樂
+            if (bgMusic) {
+                bgMusic.currentTime = 0;
+                bgMusic.play().catch(e => console.error("音樂播放失敗:", e));
+            }
+
             isPlaying = true; score = 0; ammo = 30; targets = [];
             document.querySelectorAll('.target').forEach(t => t.remove());
             document.getElementById('score').innerText = "0";
