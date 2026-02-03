@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極速打靶挑戰 - 音樂加入版</title>
+    <title>極速打靶挑戰 - 移動目標強化版</title>
     <style>
         :root {
             --primary-color: #ff4757;
+            --sniper-color: #2ed573;
         }
 
         * {
@@ -32,7 +33,7 @@
             cursor: none;
         }
 
-        /* UI 介面層級需最高 */
+        /* UI 介面層級 */
         #ui-layer {
             position: absolute;
             top: 20px;
@@ -41,7 +42,7 @@
             display: flex;
             justify-content: space-between;
             pointer-events: none;
-            z-index: 1000;
+            z-index: 2000;
             color: white;
             font-size: 24px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
@@ -52,7 +53,43 @@
             padding: 8px 20px;
             border-bottom: 3px solid var(--primary-color);
             backdrop-filter: blur(5px);
+            margin-bottom: 5px;
         }
+
+        /* 狙擊鏡遮罩層 */
+        #sniper-scope-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 1500;
+            display: none;
+            background: radial-gradient(circle 250px at var(--mouse-x) var(--mouse-y), transparent 99%, rgba(0,0,0,0.98) 100%);
+        }
+
+        /* 狙擊鏡細紅十字準星 */
+        #scope-crosshair {
+            position: fixed;
+            top: var(--mouse-y);
+            left: var(--mouse-x);
+            width: 500px;
+            height: 500px;
+            border: 2px solid #000;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            display: none;
+            z-index: 1501;
+        }
+        #scope-crosshair::before, #scope-crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 0, 0, 0.5);
+        }
+        #scope-crosshair::before { width: 100%; height: 1px; top: 50%; left: 0; }
+        #scope-crosshair::after { width: 1px; height: 100%; left: 50%; top: 0; }
 
         #reload-prompt {
             position: absolute;
@@ -63,7 +100,7 @@
             font-size: 32px;
             font-weight: bold;
             display: none;
-            z-index: 1001;
+            z-index: 2001;
             text-shadow: 0 0 10px #000;
             animation: blink 0.5s infinite;
         }
@@ -77,6 +114,7 @@
             height: 80px;
             border-radius: 50%;
             z-index: 100;
+            transition: transform 0.1s;
         }
         .target::before {
             content: '';
@@ -86,10 +124,16 @@
             border-radius: 50%;
             box-shadow: 0 10px 20px rgba(0,0,0,0.5);
         }
+        
+        /* 固定靶樣式 */
+        .target.static::before {
+             filter: saturate(0.8) contrast(1.1);
+        }
+
         .target.hit { animation: hit-effect 0.3s forwards; pointer-events: none; }
         @keyframes hit-effect { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
 
-        /* --- 槍枝顯示容器 --- */
+        /* 槍枝容器 */
         #weapon-wrapper {
             position: absolute;
             bottom: 0;
@@ -102,10 +146,10 @@
             display: flex;
             justify-content: flex-end;
             align-items: flex-end;
-            transition: transform 0.1s ease-out;
+            transition: transform 0.1s ease-out, opacity 0.2s;
         }
 
-        #ak-sprite {
+        #weapon-sprite {
             width: 100%;
             height: auto;
             max-height: 100%;
@@ -127,10 +171,31 @@
             mix-blend-mode: screen;
         }
 
+        #switch-notify {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 20px;
+            display: none;
+            z-index: 2002;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
         @keyframes recoil-shot {
-            0% { transform: translate(0, 0) rotate(0deg) scale(1); }
-            20% { transform: translate(40px, 60px) rotate(3deg) scale(1.05); }
-            100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+            0% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(30px, 40px) rotate(2deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        @keyframes recoil-sniper {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            15% { transform: translate(80px, 100px) rotate(6deg) scale(1.05); }
+            100% { transform: translate(0, 0) rotate(0deg); }
         }
 
         #crosshair {
@@ -138,7 +203,7 @@
             width: 40px;
             height: 40px;
             pointer-events: none;
-            z-index: 2000;
+            z-index: 2500;
             transform: translate(-50%, -50%);
         }
         #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #00ff00; box-shadow: 0 0 8px #00ff00; }
@@ -155,31 +220,36 @@
         button:hover { background: #ff6b81; transform: scale(1.1); }
     </style>
 </head>
-<body>
+<body oncontextmenu="return false;">
 
     <div id="game-container">
-        <!-- 背景音樂元素 -->
         <audio id="bg-music" loop>
             <source src="電子霓虹.mp3" type="audio/mpeg">
-            您的瀏覽器不支援音樂播放。
         </audio>
 
+        <div id="sniper-scope-overlay"></div>
+        <div id="scope-crosshair"></div>
         <div id="crosshair"></div>
+
         <div id="ui-layer">
-            <div class="stat-box">分數: <span id="score">0</span></div>
-            <div class="stat-box">彈藥: <span id="ammo">30</span> / 30</div>
+            <div>
+                <div class="stat-box">分數: <span id="score">0</span></div>
+                <div class="stat-box" style="font-size: 18px; color: #aaa;">武器: <span id="weapon-name" style="color: white;">AK-47</span></div>
+            </div>
+            <div class="stat-box">彈藥: <span id="ammo">30</span> / <span id="max-ammo">30</span></div>
         </div>
+        
+        <div id="switch-notify">切換武器</div>
         <div id="reload-prompt">彈匣已空！按 [R] 鍵</div>
 
         <div id="weapon-wrapper">
             <div class="muzzle-flash" id="flash"></div>
-            <img src="去背.png" id="ak-sprite" alt="AK-47 模型載入中..." 
-                 onerror="this.style.border='2px solid red'; console.error('無法讀取 去背.png');">
+            <img src="去背.png" id="weapon-sprite" alt="載入武器中...">
         </div>
 
         <div id="start-overlay" class="overlay">
-            <h1 style="font-size: 60px; letter-spacing: 5px; margin-bottom: 10px;">AK-47 實戰挑戰</h1>
-            <p style="margin-bottom: 40px; opacity: 0.7; font-size: 18px;">滑鼠左鍵射擊 | [R] 鍵換彈</p>
+            <h1 style="font-size: 60px; letter-spacing: 5px; margin-bottom: 10px;">武器大師挑戰</h1>
+            <p style="margin-bottom: 40px; opacity: 0.7; font-size: 18px;">左鍵射擊 | 右鍵開鏡(狙擊) | [R] 換彈 | [滾輪] 切換武器</p>
             <button onclick="startGame()">開始戰鬥</button>
         </div>
 
@@ -191,51 +261,145 @@
     </div>
 
     <script>
+        const WEAPONS = {
+            ak: {
+                name: "AK-47",
+                img: "去背.png",
+                maxAmmo: 30,
+                fireRate: 110,
+                reloadTime: 1000,
+                recoilClass: "recoil-shot",
+                flashScale: 1,
+                hasScope: false
+            },
+            sniper: {
+                name: "狙擊槍",
+                img: "狙擊槍去背.png",
+                maxAmmo: 8,
+                fireRate: 800,
+                reloadTime: 1500,
+                recoilClass: "recoil-sniper",
+                flashScale: 2.2,
+                hasScope: true
+            }
+        };
+
+        let currentWeaponKey = 'ak';
         let score = 0, ammo = 30, isPlaying = false, isReloading = false;
-        let isMouseDown = false, lastShootTime = 0, targets = [];
+        let isMouseDown = false, isRightMouseDown = false, isScoped = false;
+        let lastShootTime = 0, targets = [];
         
         const weaponWrapper = document.getElementById('weapon-wrapper');
+        const weaponSprite = document.getElementById('weapon-sprite');
         const flash = document.getElementById('flash');
         const crosshair = document.getElementById('crosshair');
+        const scopeOverlay = document.getElementById('sniper-scope-overlay');
+        const scopeCrosshair = document.getElementById('scope-crosshair');
         const bgMusic = document.getElementById('bg-music');
+        const switchNotify = document.getElementById('switch-notify');
 
         document.addEventListener('mousemove', (e) => {
+            document.documentElement.style.setProperty('--mouse-x', e.clientX + 'px');
+            document.documentElement.style.setProperty('--mouse-y', e.clientY + 'px');
             crosshair.style.left = e.clientX + 'px';
             crosshair.style.top = e.clientY + 'px';
             
-            if (!isReloading) {
-                const ox = (e.clientX - window.innerWidth / 2) * 0.03;
-                const oy = (e.clientY - window.innerHeight / 2) * 0.02;
+            if (!isReloading && !isScoped) {
+                const ox = (e.clientX - window.innerWidth / 2) * 0.04;
+                const oy = (e.clientY - window.innerHeight / 2) * 0.03;
                 weaponWrapper.style.transform = `translate(${ox}px, ${oy}px)`;
             }
         });
 
-        window.addEventListener('mousedown', () => isMouseDown = true);
-        window.addEventListener('mouseup', () => isMouseDown = false);
+        window.addEventListener('wheel', (e) => {
+            if (!isPlaying || isReloading || isScoped) return;
+            const keys = Object.keys(WEAPONS);
+            let index = keys.indexOf(currentWeaponKey);
+            if (e.deltaY > 0) index = (index + 1) % keys.length;
+            else index = (index - 1 + keys.length) % keys.length;
+            switchWeapon(keys[index]);
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 0) isMouseDown = true;
+            if (e.button === 2 && WEAPONS[currentWeaponKey].hasScope) toggleScope(true);
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) isMouseDown = false;
+            if (e.button === 2) toggleScope(false);
+        });
+
         window.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'r' && isPlaying && !isReloading) reload();
         });
 
+        function toggleScope(active) {
+            if (!isPlaying || isReloading) return;
+            isScoped = active;
+            if (active) {
+                scopeOverlay.style.display = 'block';
+                scopeCrosshair.style.display = 'block';
+                weaponWrapper.style.opacity = '0';
+                crosshair.style.display = 'none';
+            } else {
+                scopeOverlay.style.display = 'none';
+                scopeCrosshair.style.display = 'none';
+                weaponWrapper.style.opacity = '1';
+                crosshair.style.display = 'block';
+            }
+        }
+
+        function switchWeapon(key) {
+            if (currentWeaponKey === key) return;
+            toggleScope(false);
+            currentWeaponKey = key;
+            const w = WEAPONS[key];
+            document.getElementById('weapon-name').innerText = w.name;
+            document.getElementById('max-ammo').innerText = w.maxAmmo;
+            ammo = w.maxAmmo;
+            document.getElementById('ammo').innerText = ammo;
+            document.getElementById('reload-prompt').style.display = 'none';
+            weaponWrapper.style.transition = "transform 0.25s ease-in";
+            weaponWrapper.style.transform = "translateY(100%)";
+            setTimeout(() => {
+                weaponSprite.src = w.img;
+                weaponWrapper.style.transform = "translateY(0)";
+                switchNotify.innerText = `裝備: ${w.name}`;
+                switchNotify.style.display = 'block';
+                setTimeout(() => switchNotify.style.display = 'none', 1000);
+            }, 250);
+        }
+
         function shoot() {
             if (!isPlaying || isReloading || ammo <= 0) return;
+            const w = WEAPONS[currentWeaponKey];
             const now = Date.now();
-            if (now - lastShootTime < 110) return;
+            if (now - lastShootTime < w.fireRate) return;
 
             lastShootTime = now;
             ammo--;
             document.getElementById('ammo').innerText = ammo;
 
-            weaponWrapper.style.animation = 'none';
-            void weaponWrapper.offsetWidth;
-            weaponWrapper.style.animation = 'recoil-shot 0.1s ease-out';
-            
-            flash.style.display = 'block';
-            setTimeout(() => flash.style.display = 'none', 50);
+            if (!isScoped) {
+                weaponWrapper.style.animation = 'none';
+                void weaponWrapper.offsetWidth;
+                weaponWrapper.style.animation = `${w.recoilClass} 0.12s ease-out`;
+                flash.style.transform = `translate(50%, -50%) scale(${w.flashScale})`;
+                flash.style.display = 'block';
+                setTimeout(() => flash.style.display = 'none', 60);
+            } else {
+                scopeOverlay.style.transition = "none";
+                scopeOverlay.style.transform = 'scale(1.03)';
+                setTimeout(() => {
+                    scopeOverlay.style.transition = "transform 0.1s";
+                    scopeOverlay.style.transform = 'scale(1)';
+                }, 50);
+            }
 
-            const hitEl = document.elementFromPoint(
-                parseInt(crosshair.style.left), 
-                parseInt(crosshair.style.top)
-            );
+            const mouseX = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--mouse-x'));
+            const mouseY = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--mouse-y'));
+            const hitEl = document.elementFromPoint(mouseX, mouseY);
             
             if (hitEl && hitEl.classList.contains('target') && !hitEl.classList.contains('hit')) {
                 score += 10;
@@ -248,55 +412,73 @@
                 }, 300);
             }
 
-            if (ammo === 0) document.getElementById('reload-prompt').style.display = 'block';
+            if (ammo === 0) {
+                document.getElementById('reload-prompt').style.display = 'block';
+                if (isScoped) toggleScope(false);
+            }
         }
 
         function reload() {
+            if (isScoped) toggleScope(false);
             isReloading = true;
+            const w = WEAPONS[currentWeaponKey];
             document.getElementById('reload-prompt').innerText = "換彈中...";
             document.getElementById('reload-prompt').style.display = 'block';
-            
-            weaponWrapper.style.transition = "transform 0.6s cubic-bezier(0.5, 0, 0.5, 1)";
+            weaponWrapper.style.transition = `transform ${w.reloadTime / 1000 * 0.6}s cubic-bezier(0.5, 0, 0.5, 1)`;
             weaponWrapper.style.transform = `translateY(120%) rotate(15deg)`; 
-            
             setTimeout(() => {
-                ammo = 30;
+                ammo = w.maxAmmo;
                 isReloading = false;
                 document.getElementById('ammo').innerText = ammo;
                 document.getElementById('reload-prompt').style.display = 'none';
                 document.getElementById('reload-prompt').innerText = "彈匣已空！按 [R] 鍵";
                 weaponWrapper.style.transition = "none";
                 weaponWrapper.style.transform = `translateY(0)`;
-            }, 1000);
+            }, w.reloadTime);
         }
 
-        function spawnTarget() {
+        function spawnTarget(isMovingOverride = null) {
             if (!isPlaying) return;
             const el = document.createElement('div');
             el.className = 'target';
+            
+            // 隨機決定類型（如果沒指定的話）
+            const isMoving = isMovingOverride !== null ? isMovingOverride : Math.random() > 0.4;
+            if (!isMoving) el.classList.add('static');
+
             const x = 100 + Math.random() * (window.innerWidth - 200);
             const y = 50 + Math.random() * (window.innerHeight - 450);
             el.style.left = x + 'px';
             el.style.top = y + 'px';
+            
             document.getElementById('game-container').appendChild(el);
-            targets.push({ el, x, y, vx: (Math.random() - 0.5) * 8 });
+            
+            targets.push({ 
+                el, 
+                x, 
+                y, 
+                vx: isMoving ? (Math.random() > 0.5 ? 1 : -1) * (4 + Math.random() * 5) : 0, 
+                isMoving 
+            });
         }
 
         function startGame() {
-            // 播放背景音樂
             if (bgMusic) {
                 bgMusic.currentTime = 0;
                 bgMusic.play().catch(e => console.error("音樂播放失敗:", e));
             }
-
-            isPlaying = true; score = 0; ammo = 30; targets = [];
+            isPlaying = true; score = 0; targets = [];
+            switchWeapon('ak'); 
             document.querySelectorAll('.target').forEach(t => t.remove());
             document.getElementById('score').innerText = "0";
-            document.getElementById('ammo').innerText = "30";
             document.getElementById('start-overlay').style.display = 'none';
             document.getElementById('end-overlay').style.display = 'none';
             document.getElementById('reload-prompt').style.display = 'none';
-            for(let i=0; i<4; i++) spawnTarget();
+            
+            // 按照需求生成：4 個移動靶，2 個固定靶
+            for(let i=0; i<4; i++) spawnTarget(true); 
+            for(let i=0; i<2; i++) spawnTarget(false);
+
             requestAnimationFrame(update);
         }
 
@@ -305,9 +487,15 @@
             if (isMouseDown) shoot();
             
             targets.forEach(t => {
-                t.x += t.vx;
-                if (t.x < 50 || t.x > window.innerWidth - 130) t.vx *= -1;
-                t.el.style.left = t.x + 'px';
+                if (t.isMoving) {
+                    t.x += t.vx;
+                    // 邊界碰撞檢查
+                    if (t.x < 50 || t.x > window.innerWidth - 130) {
+                        t.vx *= -1;
+                        t.x = Math.max(50, Math.min(window.innerWidth - 130, t.x));
+                    }
+                    t.el.style.left = t.x + 'px';
+                }
             });
             requestAnimationFrame(update);
         }
